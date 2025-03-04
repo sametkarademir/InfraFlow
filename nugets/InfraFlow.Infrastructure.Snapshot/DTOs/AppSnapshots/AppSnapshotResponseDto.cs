@@ -1,6 +1,6 @@
 using InfraFlow.Domain.Core.Dtos;
 
-namespace InfraFlow.Application.DTOs.AppSnapshots;
+namespace InfraFlow.Infrastructure.Snapshot.DTOs.AppSnapshots;
 
 public class AppSnapshotResponseDto : CreationAuditedEntityDto<Guid>
 {

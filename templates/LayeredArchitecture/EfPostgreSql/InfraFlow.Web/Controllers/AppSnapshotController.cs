@@ -1,5 +1,5 @@
 using InfraFlow.Application.DTOs.Common;
-using InfraFlow.Application.Services.Interfaces.Snapshots;
+using InfraFlow.Infrastructure.Snapshot.Services.AppSnapshots;
 using Microsoft.AspNetCore.Mvc;
 
 namespace InfraFlow.Web.Controllers;
@@ -8,9 +8,9 @@ namespace InfraFlow.Web.Controllers;
 [Route("api/[controller]")]
 public class AppSnapshotController : ControllerBase
 {
-    private readonly IAppSnapshotService _appSnapshotService;
+    private readonly IAppSnapshotAppService _appSnapshotService;
 
-    public AppSnapshotController(IAppSnapshotService appSnapshotService)
+    public AppSnapshotController(IAppSnapshotAppService appSnapshotService)
     {
         _appSnapshotService = appSnapshotService;
     }
@@ -26,7 +26,7 @@ public class AppSnapshotController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetSnapshotsPaginatedAsync([FromQuery] PaginateRequestDto request)
     {
-        var snapshots = await _appSnapshotService.GetSnapshotsPaginatedAsync(request);
+        var snapshots = await _appSnapshotService.GetSnapshotsPaginatedAsync(request.PageIndex, request.PageSize);
         
         return Ok(snapshots);
     }

@@ -2,12 +2,14 @@ using Autofac;
 using Autofac.Extensions.DependencyInjection;
 using InfraFlow.Application;
 using InfraFlow.EntityFramework.AuditLog.DependencyInjection;
+using InfraFlow.EntityFramework.Core.Enums;
 using InfraFlow.EntityFramework.ExceptionLog.DependencyInjection;
 using InfraFlow.EntityFramework.HttpRequestLog.DependencyInjection;
 using InfraFlow.EntityFramework.Identity.DependencyInjection;
 using InfraFlow.EntityFramework.Snapshot.DependencyInjection;
 using InfraFlow.Infrastructure;
 using InfraFlow.Infrastructure.Contexts;
+using InfraFlow.Infrastructure.Snapshot.DependencyInjection;
 using InfraFlow.Web.Helpers;
 using Microsoft.OpenApi.Models;
 using Newtonsoft.Json;
@@ -36,13 +38,23 @@ builder.Host.ConfigureContainer<ContainerBuilder>(containerBuilder =>
 });
 
 builder.Services.AddInfrastructureServices(builder.Configuration);
-builder.Services.AddApplicationServices(builder.Configuration);
+builder.Services.AddApplicationServices();
 
 builder.Services.AddEntityFrameworkAuditLogServices<ApplicationDbContext>();
 builder.Services.AddEntityFrameworkExceptionLogServices<ApplicationDbContext>();
 builder.Services.AddEntityFrameworkHttpRequestLogServices<ApplicationDbContext>();
 builder.Services.AddEntityFrameworkIdentityServices<ApplicationDbContext>();
 builder.Services.AddEntityFrameworkSnapshotServices<ApplicationDbContext>();
+
+builder.Services.AddInfrastructureSnapshotServices(opt =>
+{
+    opt.ConnectionString = builder.Configuration["ConnectionStrings:DefaultConnection"] ?? "Host=localhost;Port=5432;Database=InfraFlow;Username=postgres;Password=postgres";
+    opt.DatabaseProviderType = DatabaseProviderTypes.PostgreSql;
+    opt.IsAppSnapshotEnabled = true;
+    opt.IsAppDatabaseDetailEnabled = false;
+    opt.IsAppConfigurationDetailEnabled = false;
+    opt.IsAppAssemblyEnabled = false;
+});
 
 builder.Services.AddControllers().AddNewtonsoftJson(opt =>
 {
@@ -93,6 +105,8 @@ if (app.Environment.IsDevelopment())
     app.UseDeveloperExceptionPage();
 }
 app.UseCors("MyCorsPolicy");
+app.ConfigureSnapshotMiddleware();
+
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();

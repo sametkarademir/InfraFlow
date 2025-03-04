@@ -7,6 +7,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+      <ProjectReference Include="..\..\..\..\nugets\InfraFlow.Infrastructure.Snapshot\InfraFlow.Infrastructure.Snapshot.csproj" />
       <ProjectReference Include="..\InfraFlow.Infrastructure\InfraFlow.Infrastructure.csproj" />
     </ItemGroup>
     

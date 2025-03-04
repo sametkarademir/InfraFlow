@@ -4,49 +4,71 @@ using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
-using InfraFlow.Application.Services.Interfaces.Snapshots;
 using InfraFlow.Domain.Core.Aggregates.Entities;
 using InfraFlow.Domain.Snapshot.Entities;
+using InfraFlow.EntityFramework.Core.Enums;
 using InfraFlow.EntityFramework.Snapshot.Repositories;
+using InfraFlow.Infrastructure.Snapshot.Models;
+using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using MySql.Data.MySqlClient;
 using Npgsql;
 
-namespace InfraFlow.Application.Services.Concretes.Snapshots;
+namespace InfraFlow.Infrastructure.Snapshot.Services.AppSnapshots;
 
 public class AppSnapshotInitializerService(
-    ILogger<AppSnapshotService> logger,
+    ILogger<AppSnapshotInitializerService> logger,
     IConfiguration configuration,
+    IOptions<SnapshotOptions> options,
+    IMemoryCache memoryCache,
     IAppSnapshotRepository appSnapshotRepository,
-    IMemoryCache memoryCache)
+    IAppDatabaseDetailRepository appDatabaseDetailRepository,
+    IAppConfigurationDetailRepository appConfigurationDetailRepository,
+    IAppAssemblyRepository appAssemblyRepository)
     : IAppSnapshotInitializerService
 {
     public async Task TakeAppSnapshotAsync()
     {
         try
         {
-            var appSnapshot = GetAppSnapshot();
-            await appSnapshotRepository.AddAsync(appSnapshot, true);
-
-            memoryCache.Set(nameof(IAppSnapshotEntity), appSnapshot.Id);
-
-            var connectionString = configuration["ConnectionStrings:DefaultConnection"];
-            if (!string.IsNullOrWhiteSpace(connectionString))
+            AppSnapshot? appSnapshot = null;
+            
+            if (options.Value.IsAppSnapshotEnabled)
             {
-                var appDatabaseDetail = await GetAppDatabaseDetail(appSnapshot.Id, connectionString);
-
-                if (appDatabaseDetail != null)
-                {
-                    //await _appDatabaseDetailRepository.AddAsync(appDatabaseDetail, true);
-                }
+                appSnapshot = GetAppSnapshot();
+                await appSnapshotRepository.AddAsync(appSnapshot, true);
+                
+                memoryCache.Set(nameof(IAppSnapshotEntity), appSnapshot.Id);
             }
 
-            var appConfigurationDetails = GetAppConfigurationDetails(appSnapshot.Id);
-            //await _appConfigurationDetailRepository.AddRangeAsync(appConfigurationDetails, true);
+            if (options.Value.IsAppDatabaseDetailEnabled)
+            {
+                var connectionString = options.Value.ConnectionString;
+                if (!string.IsNullOrWhiteSpace(connectionString))
+                {
+                    var appDatabaseDetail = await GetAppDatabaseDetail(appSnapshot?.Id, connectionString, options.Value.DatabaseProviderType);
 
-            var appAssemblies = GetAppAssemblies(appSnapshot.Id);
-            //await _appAssemblyRepository.AddRangeAsync(appAssemblies, true);
+                    if (appDatabaseDetail != null)
+                    {
+                        await appDatabaseDetailRepository.AddAsync(appDatabaseDetail, true);
+                    }
+                }
+            }
+            
+            if (options.Value.IsAppConfigurationDetailEnabled)
+            {
+                var appConfigurationDetails = GetAppConfigurationDetails(appSnapshot?.Id);
+                await appConfigurationDetailRepository.AddRangeAsync(appConfigurationDetails, true);
+            }
+            
+            if (options.Value.IsAppAssemblyEnabled)
+            {
+                var appAssemblies = GetAppAssemblies(appSnapshot?.Id);
+                await appAssemblyRepository.AddRangeAsync(appAssemblies, true);
+            }
         }
         catch (Exception e)
         {
@@ -325,137 +347,8 @@ public class AppSnapshotInitializerService(
     }
 
     #endregion
-
-    #region AppDatabase Methods
-
-    private async Task<AppDatabaseDetail?> GetAppDatabaseDetail(Guid snapshotId, string connectionString)
-    {
-        try
-        {
-            await using var connection = this.GetDbConnection(connectionString);
-            await connection.OpenAsync();
-
-            string databaseName = connection.Database;
-            string databaseVersion = await GetDatabaseVersionAsync(connection);
-
-            int tableCount = await GetTableCountAsync(connection);
-
-            var databaseDetail = new AppDatabaseDetail
-            {
-                Host = connectionString,
-                DatabaseName = databaseName,
-                DatabaseVersion = databaseVersion,
-                TableCount = tableCount,
-                AppSnapshotId = snapshotId
-            };
-
-            var databaseTableDetails =
-                await GetTotalRecordCountAsync(connection, connectionString, snapshotId, databaseDetail.Id);
-            databaseDetail.AppDatabaseTableDetails = databaseTableDetails;
-
-            return databaseDetail;
-        }
-        catch (Exception e)
-        {
-            logger.LogError("Error getting database detail: {Error}", e.Message);
-            return null;
-        }
-    }
-
-    private DbConnection GetDbConnection(string connectionString)
-    {
-        return new NpgsqlConnection(connectionString);
-    }
-
-    private async Task<string> GetDatabaseVersionAsync(DbConnection connection)
-    {
-        try
-        {
-            string query = "SHOW server_version";
-
-            await using var command = connection.CreateCommand();
-            command.CommandText = query;
-            var result = await command.ExecuteScalarAsync();
-
-            return result?.ToString() ?? "Unknown";
-        }
-        catch (Exception e)
-        {
-            logger.LogError("Error getting database version: {Error}", e.Message);
-            return "Unknown";
-        }
-    }
-
-    private async Task<int> GetTableCountAsync(DbConnection connection)
-    {
-        try
-        {
-            string query = "SELECT COUNT(*) FROM pg_tables WHERE schemaname = 'public'";
-
-            await using var command = connection.CreateCommand();
-            command.CommandText = query;
-
-            return Convert.ToInt32(await command.ExecuteScalarAsync());
-        }
-        catch (Exception e)
-        {
-            logger.LogError("Error getting table count: {Error}", e.Message);
-            return 0;
-        }
-    }
-
-    private async Task<List<AppDatabaseTableDetail>> GetTotalRecordCountAsync(DbConnection connection,
-        string connectionString, Guid snapshotId, Guid databaseDetailId)
-    {
-        try
-        {
-            string tableQuery = "SELECT tablename FROM pg_tables WHERE schemaname = 'public'";
-
-            await using var tableCommand = connection.CreateCommand();
-            tableCommand.CommandText = tableQuery;
-
-            await using var reader = await tableCommand.ExecuteReaderAsync();
-
-            var databaseTables = new List<AppDatabaseTableDetail>();
-
-            while (await reader.ReadAsync())
-            {
-                string tableName = reader.GetString(0);
-
-                string countQuery = $"SELECT COUNT(*) FROM \"{tableName}\"";
-
-                await using var newConnection = this.GetDbConnection(connectionString);
-                await newConnection.OpenAsync();
-
-                await using var countCommand = newConnection.CreateCommand();
-                countCommand.CommandText = countQuery;
-                long totalRecords = Convert.ToInt64(await countCommand.ExecuteScalarAsync());
-
-                databaseTables.Add(new AppDatabaseTableDetail
-                {
-                    TableName = tableName,
-                    RecordCount = totalRecords,
-                    AppSnapshotId = snapshotId,
-                    AppDatabaseDetailId = databaseDetailId
-                });
-
-                await newConnection.CloseAsync();
-            }
-
-            return databaseTables;
-        }
-        catch (Exception e)
-        {
-            logger.LogError("Error getting total record count: {Error}", e.Message);
-            return new List<AppDatabaseTableDetail>();
-        }
-    }
-
-    #endregion
-
     #region AppAssembly Methods
-
-    private List<AppAssembly> GetAppAssemblies(Guid snapshotId)
+    private List<AppAssembly> GetAppAssemblies(Guid? snapshotId)
     {
         try
         {
@@ -480,12 +373,9 @@ public class AppSnapshotInitializerService(
             return new List<AppAssembly>();
         }
     }
-
     #endregion
-
     #region AppConfigurationDetail Methods
-
-    private List<AppConfigurationDetail> GetAppConfigurationDetails(Guid snapshotId)
+    private List<AppConfigurationDetail> GetAppConfigurationDetails(Guid? snapshotId)
     {
         try
         {
@@ -507,9 +397,7 @@ public class AppSnapshotInitializerService(
             return new List<AppConfigurationDetail>();
         }
     }
-
-    private void FlattenConfiguration(Dictionary<string, string?> source, Dictionary<string, string> target,
-        string parentKey = "")
+    private void FlattenConfiguration(Dictionary<string, string?> source, Dictionary<string, string> target, string parentKey = "")
     {
         foreach (var kvp in source)
         {
@@ -518,6 +406,155 @@ public class AppSnapshotInitializerService(
             {
                 target[fullKey] = kvp.Value ?? "null";
             }
+        }
+    }
+    #endregion
+    #region AppDatabase Methods
+
+    private async Task<AppDatabaseDetail?> GetAppDatabaseDetail(Guid? snapshotId, string connectionString, DatabaseProviderTypes databaseProviderType)
+    {
+        try
+        {
+            await using var connection = this.GetDbConnection(connectionString, databaseProviderType);
+            await connection.OpenAsync();
+
+            string databaseName = connection.Database;
+            string databaseVersion = await GetDatabaseVersionAsync(connection, databaseProviderType);
+
+            int tableCount = await GetTableCountAsync(connection, databaseProviderType);
+
+            var databaseDetail = new AppDatabaseDetail
+            {
+                Host = connectionString,
+                DatabaseName = databaseName,
+                DatabaseVersion = databaseVersion,
+                TableCount = tableCount,
+                AppSnapshotId = snapshotId
+            };
+
+            var databaseTableDetails =
+                await GetTotalRecordCountAsync(connection, connectionString, snapshotId, databaseDetail.Id, databaseProviderType);
+            databaseDetail.AppDatabaseTableDetails = databaseTableDetails;
+
+            return databaseDetail;
+        }
+        catch (Exception e)
+        {
+            logger.LogError("Error getting database detail: {Error}", e.Message);
+            return null;
+        }
+    }
+
+    private DbConnection GetDbConnection(string connectionString, DatabaseProviderTypes databaseProviderType)
+    {
+        return databaseProviderType switch
+        {
+            DatabaseProviderTypes.SqlServer => new SqlConnection(connectionString),
+            DatabaseProviderTypes.MySql => new MySqlConnection(connectionString),
+            DatabaseProviderTypes.PostgreSql => new NpgsqlConnection(connectionString),
+            _ => throw new NotSupportedException("Unsupported database provider")
+        };
+    }
+
+    private async Task<string> GetDatabaseVersionAsync(DbConnection connection, DatabaseProviderTypes databaseProviderType)
+    {
+        try
+        {
+            string query = databaseProviderType switch
+            {
+                DatabaseProviderTypes.SqlServer => "SELECT SERVERPROPERTY('ProductVersion')",
+                DatabaseProviderTypes.MySql => "SELECT VERSION()",
+                DatabaseProviderTypes.PostgreSql => "SHOW server_version",
+                _ => throw new NotSupportedException("Unsupported database type")
+            };
+
+            await using var command = connection.CreateCommand();
+            command.CommandText = query;
+            var result = await command.ExecuteScalarAsync();
+
+            return result?.ToString() ?? "Unknown";
+        }
+        catch (Exception e)
+        {
+            logger.LogError("Error getting database version: {Error}", e.Message);
+            return "Unknown";
+        }
+    }
+
+    private async Task<int> GetTableCountAsync(DbConnection connection, DatabaseProviderTypes databaseProviderType)
+    {
+        try
+        {
+            string query = databaseProviderType switch
+            {
+                DatabaseProviderTypes.SqlServer => "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'",
+                DatabaseProviderTypes.MySql => "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE()",
+                DatabaseProviderTypes.PostgreSql => "SELECT COUNT(*) FROM pg_tables WHERE schemaname = 'public'",
+                _ => throw new NotSupportedException("Unsupported database type")
+            };
+
+            await using var command = connection.CreateCommand();
+            command.CommandText = query;
+
+            return Convert.ToInt32(await command.ExecuteScalarAsync());
+        }
+        catch (Exception e)
+        {
+            logger.LogError("Error getting table count: {Error}", e.Message);
+            return 0;
+        }
+    }
+
+    private async Task<List<AppDatabaseTableDetail>> GetTotalRecordCountAsync(DbConnection connection,
+        string connectionString, Guid? snapshotId, Guid databaseDetailId, DatabaseProviderTypes databaseProviderType)
+    {
+        try
+        {
+            string tableQuery = databaseProviderType switch
+            {
+                DatabaseProviderTypes.SqlServer => "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'",
+                DatabaseProviderTypes.MySql => "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE()",
+                DatabaseProviderTypes.PostgreSql => "SELECT tablename FROM pg_tables WHERE schemaname = 'public'",
+                _ => throw new NotSupportedException("Unsupported database type")
+            };
+
+            await using var tableCommand = connection.CreateCommand();
+            tableCommand.CommandText = tableQuery;
+
+            await using var reader = await tableCommand.ExecuteReaderAsync();
+
+            var databaseTables = new List<AppDatabaseTableDetail>();
+
+            while (await reader.ReadAsync())
+            {
+                string tableName = reader.GetString(0);
+
+                string countQuery = $"SELECT COUNT(*) FROM \"{tableName}\"";
+
+                await using var newConnection = this.GetDbConnection(connectionString, databaseProviderType);
+                await newConnection.OpenAsync();
+
+                await using var countCommand = newConnection.CreateCommand();
+                countCommand.CommandText = countQuery;
+                long totalRecords = Convert.ToInt64(await countCommand.ExecuteScalarAsync());
+
+                databaseTables.Add(new AppDatabaseTableDetail
+                {
+                    TableName = tableName,
+                    RecordCount = totalRecords,
+                    AppSnapshotId = snapshotId,
+                    AppDatabaseDetailId = databaseDetailId
+                });
+
+                await newConnection.CloseAsync();
+            }
+
+            return databaseTables;
+        }
+        catch (Exception e)
+        {
+            logger.LogError("Error getting total record count: {Error}", e.Message);
+            return new List<AppDatabaseTableDetail>();
         }
     }
 

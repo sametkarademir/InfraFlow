@@ -1,4 +1,4 @@
-namespace InfraFlow.Application.Services.Interfaces.Snapshots;
+namespace InfraFlow.Infrastructure.Snapshot.Services.AppSnapshots;
 
 public interface IAppSnapshotInitializerService
 {
