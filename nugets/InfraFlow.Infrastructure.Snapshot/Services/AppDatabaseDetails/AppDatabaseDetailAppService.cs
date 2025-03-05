@@ -2,6 +2,7 @@ using InfraFlow.EntityFramework.Core.Models;
 using InfraFlow.EntityFramework.Snapshot.Repositories;
 using InfraFlow.Infrastructure.Snapshot.DTOs.AppDatabaseDetails;
 using InfraFlow.Infrastructure.Snapshot.DTOs.AppDatabaseTableDetails;
+using Microsoft.EntityFrameworkCore;
 
 namespace InfraFlow.Infrastructure.Snapshot.Services.AppDatabaseDetails;
 
@@ -12,6 +13,7 @@ public class AppDatabaseDetailAppService(IAppDatabaseDetailRepository appDatabas
         var appDatabaseDetails = await appDatabaseDetailRepository.GetListAsync(
             predicate: item => item.AppSnapshotId == snapshotId,
             orderBy: q => q.OrderByDescending(item => item.CreationTime),
+            include: q => q.Include(item => item.AppDatabaseTableDetails!),
             index: index,
             size: size,
             cancellationToken: cancellationToken

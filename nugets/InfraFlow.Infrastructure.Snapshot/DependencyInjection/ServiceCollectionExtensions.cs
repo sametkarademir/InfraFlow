@@ -1,5 +1,8 @@
 using InfraFlow.Infrastructure.Snapshot.Models;
 using InfraFlow.Infrastructure.Snapshot.Services;
+using InfraFlow.Infrastructure.Snapshot.Services.AppAssemblies;
+using InfraFlow.Infrastructure.Snapshot.Services.AppConfigurationDetails;
+using InfraFlow.Infrastructure.Snapshot.Services.AppDatabaseDetails;
 using InfraFlow.Infrastructure.Snapshot.Services.AppSnapshots;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -18,6 +21,9 @@ public static class ServiceCollectionExtensions
         
         services.AddScoped<IAppSnapshotInitializerService, AppSnapshotInitializerService>();
         services.AddScoped<IAppSnapshotAppService, AppSnapshotAppService>();
+        services.AddScoped<IAppDatabaseDetailAppService, AppDatabaseDetailAppService>();
+        services.AddScoped<IAppConfigurationDetailAppService, AppConfigurationDetailAppService>();
+        services.AddScoped<IAppAssemblyAppService, AppAssemblyAppService>();
         
         return services;
     }

@@ -44,6 +44,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InfraFlow.EntityFramework",
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InfraFlow.Infrastructure.Snapshot", "nugets\InfraFlow.Infrastructure.Snapshot\InfraFlow.Infrastructure.Snapshot.csproj", "{21AB1DCE-FB3F-45B2-865B-3F5E91DAAE4A}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InfraFlow.Infrastructure.AuditLog", "nugets\InfraFlow.Infrastructure.AuditLog\InfraFlow.Infrastructure.AuditLog.csproj", "{0BBD6EB8-5D0E-4283-8532-EE215FD813CB}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -70,6 +72,7 @@ Global
 		{BA23D4EB-9078-4632-A3D9-D6195E1DA3CD} = {14BF0D6C-B399-4D9C-AB58-EFCE1CE1FF75}
 		{D8DD1434-9B60-4253-A121-8188759AD1D4} = {14BF0D6C-B399-4D9C-AB58-EFCE1CE1FF75}
 		{21AB1DCE-FB3F-45B2-865B-3F5E91DAAE4A} = {14BF0D6C-B399-4D9C-AB58-EFCE1CE1FF75}
+		{0BBD6EB8-5D0E-4283-8532-EE215FD813CB} = {14BF0D6C-B399-4D9C-AB58-EFCE1CE1FF75}
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{E5DC5BB8-FFA1-4D6F-B2C3-5CC35CF69EDB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
@@ -144,5 +147,9 @@ Global
 		{21AB1DCE-FB3F-45B2-865B-3F5E91DAAE4A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{21AB1DCE-FB3F-45B2-865B-3F5E91DAAE4A}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{21AB1DCE-FB3F-45B2-865B-3F5E91DAAE4A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0BBD6EB8-5D0E-4283-8532-EE215FD813CB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0BBD6EB8-5D0E-4283-8532-EE215FD813CB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0BBD6EB8-5D0E-4283-8532-EE215FD813CB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0BBD6EB8-5D0E-4283-8532-EE215FD813CB}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

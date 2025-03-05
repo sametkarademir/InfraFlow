@@ -13,6 +13,7 @@ public class AppAuditLogConfiguration(DatabaseProviderTypes databaseProviderType
         builder.ApplyGlobalEntityConfigurations(databaseProviderType);
         
         builder.ToTable("AppAuditLogs");
+        builder.HasIndex(item => new { item.EntityId, item.EntityName });
         
         builder.Property(item => item.EntityId).HasMaxLength(50).IsRequired();
         builder.Property(item => item.EntityName).HasMaxLength(500).IsRequired();
